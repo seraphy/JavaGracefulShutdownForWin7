@@ -1,7 +1,7 @@
 JavaアプリのWindows7における終了処理について
 =======================================
 
-##概要
+## 概要
 
 **Windows Vista以降**、システムのログオフ、リブート、シャットダウンを行う場合、
 起動中のアプリケーションは終了通知が送られた際に、ShutdownBlockReasonCreate関数を呼び出さないかぎり、
@@ -17,8 +17,8 @@ JavaアプリのWindows7における終了処理について
 シャットダウン時に強制終了されないように、ネイティブ関数である **ShutdownBlockReasonCreate関数** を呼び出すための
 ネイティブ関数 **Win7Support#shutdownBlockReasonCreate** を作成し、Javaアプリケーション上から、これを呼び出す。
 
-ShutdownBlockRrasonCreate関数は表示中のメインウィンドウへのウィンドウハンドルが必要であるため、
-JNIのライブラリであるJAWT.DLLを経由してウィンドウハンドルを取得し、これをShutdownBlockRrasonCreateに渡す。
+ShutdownBlockReasonCreate関数は表示中のメインウィンドウへのウィンドウハンドルが必要であるため、
+JNIのライブラリであるJAWT.DLLを経由してウィンドウハンドルを取得し、これをShutdownBlockReasonCreateに渡す。
 
 
 **JAWT.DLL**はJRE付属のライブラリであるが必ずしもロードされているとは限らないため、
@@ -29,14 +29,14 @@ JNIのライブラリであるJAWT.DLLを経由してウィンドウハンドル
 
 
 シャットダウンを遅延させるためには、シャットダウン開始時にシステムからアプリケーションに **WM_QUERYENDSESSIONメッセージ** が
-送信されたとき、このメッセージに対する応答としてShutdownBlockRrasonCreateを呼び出し、
+送信されたとき、このメッセージに対する応答としてShutdownBlockReasonCreateを呼び出し、
 シャットダウンを遅延することを示すFALSEの応答を返すのか良い。
 
 このため、本アプリケーションは、 **Win7Support#shutdownBlockReasonCreate()** の呼び出し時に、
 対象となるJFrameのネイティブのウィンドウプロシージャをサブクラス化(WndProcのカスケード化)し、
 WM_QUERYENDSESSIONメッセージの処理をオーバーライドしている。
 
-なお、 **ShutdownBlockRrasonDestroy関数** によってシャットダウン遅延は解除される。
+なお、 **ShutdownBlockReasonDestroy関数** によってシャットダウン遅延は解除される。
 
 ただし、ウィンドウが破棄されれば、自動的に解除されたとみなされるため、終了処理時には呼び出しを忘れたとしても
 うまくシャットダウンしてくれる。
@@ -47,7 +47,7 @@ WM_QUERYENDSESSIONメッセージの処理をオーバーライドしている�
 本アプリで使用するネイティブライブラリは、JFrameのネイティブウィンドウのウィンドウプロシージャのメッセージ処理をオーバーライドするため、
 ウィンドウプロシージャのサブクラス化という手法をとっている。
 
-サブクラス化とは、システムからのウィンドウメッセージを処理するウィンドウプロシージャへのアドレス **GWPL_ENDPROC** を、
+サブクラス化とは、システムからのウィンドウメッセージを処理するウィンドウプロシージャへのアドレス **GWPL_WNDPROC** を、
 それぞれのウィンドウが保持しているため、これを書き換えてメッセージ処理を別のウィンドウプロシージャに転送することである。
 
 転送先では、カスタマイズが必要なメッセージの処理を行ったあと、それ以外のメッセージを従来どおりに処理するため、
@@ -82,7 +82,7 @@ Javaアプリでlogoff時の終了処理を遅延させる例
 
 - [OKIソフトウェア::25. Windows 7 のコンソール・アプリで logoff 時に長い処理を行うには](http://www.oki-osk.jp/esc/cyg/cygwin-25.html)
 
-ShutdownBlockRrasonCreate関数の使いかた例
+ShutdownBlockReasonCreate関数の使いかた例
 
 - [DOBON.NETプログラミング掲示板過去ログ::スタートメニューの電源ボタン押下のイベント取得方法](http://dobon.net/vb/bbs/log3-36/22254.html)
 
