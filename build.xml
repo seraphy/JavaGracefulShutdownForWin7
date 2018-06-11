@@ -4,8 +4,8 @@
 	<target name="create_run_jar">
 		<delete dir="work" />
 		<mkdir dir="work" />
-		<javac srcdir="src" encoding="UTF-8" target="1.6" debug="true"
-			destdir="work" />
+		<javac srcdir="src" encoding="UTF-8" source="1.8" target="1.8" debug="true"
+			destdir="work" includeantruntime="false"/>
 		<copy toDir="work">
 			<fileset dir="src">
 				<exclude name="**/*.java" />
