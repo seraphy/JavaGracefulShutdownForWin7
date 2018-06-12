@@ -2,6 +2,8 @@ package jp.seraphyware.win7frametest;
 
 import java.awt.BorderLayout;
 import java.awt.Container;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
 import java.awt.Image;
 import java.awt.SystemTray;
 import java.awt.TrayIcon;
@@ -17,12 +19,21 @@ import java.net.URL;
 import java.util.Date;
 
 import javax.imageio.ImageIO;
+import javax.swing.AbstractAction;
+import javax.swing.Action;
+import javax.swing.BorderFactory;
+import javax.swing.JCheckBox;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
+import javax.swing.JPanel;
 import javax.swing.JProgressBar;
+import javax.swing.JSpinner;
+import javax.swing.SpinnerNumberModel;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import javax.swing.UIManager;
+import javax.swing.event.ChangeEvent;
+import javax.swing.event.ChangeListener;
 
 /**
  * JNIを用いてWindows7のネイティブAPIを通じて、 シャットダウンまたはリブート時にアプリケーションが
@@ -48,6 +59,16 @@ public class JavaForWin7Frame extends JFrame {
     private JProgressBar progressBar;
 
     /**
+     * 安全に終了するまでの遅延時間
+     */
+    private SpinnerNumberModel modelspnGracefullDelay;
+
+    /**
+     * シャットダウンフックの遅延時間
+     */
+    private SpinnerNumberModel modelShutdownHookDelay;
+
+    /**
      * タスクトレイのアイコン
      */
     private TrayIcon trayIcon;
@@ -56,6 +77,8 @@ public class JavaForWin7Frame extends JFrame {
      * ネイティブライブラリをロードしたことを示すフラグ
      */
     private static boolean nativeLibLoaded;
+
+    private static int ShutdownDownHookDelay = SHUTDOWN_WAIT_SECS;
 
     /**
      * Staticイニシャライザ
@@ -84,7 +107,6 @@ public class JavaForWin7Frame extends JFrame {
 
                 nativeLibLoaded = true;
             }
-            System.out.println("nativeLibLoaded=" + nativeLibLoaded);
 
         } catch (Exception ex) {
             ex.printStackTrace();
@@ -174,26 +196,107 @@ public class JavaForWin7Frame extends JFrame {
             progressBar.setMaximum(SHUTDOWN_WAIT_SECS * 10);
             progressBar.setValue(0);
 
+            // パラメータ
+            JPanel pnl = new JPanel();
+            pnl.setBorder(BorderFactory.createEmptyBorder(3, 3, 3, 3));
+            GridBagLayout gbl = new GridBagLayout();
+            pnl.setLayout(gbl);
+            GridBagConstraints gbc = new GridBagConstraints();
+
+            JCheckBox checkEnable = new JCheckBox();
+            Action actCheckEnable = new AbstractAction("Enable ShutdownDelayer") {
+            	@Override
+            	public void actionPerformed(ActionEvent e) {
+            		if (checkEnable.isSelected()) {
+            			enableShutdownDelayer();
+            		} else {
+            			disableShutdownDelayer();
+            		}
+            	}
+            };
+            checkEnable.setAction(actCheckEnable);
+
+            gbc.gridy = 0;
+            gbc.weightx = 1.;
+            pnl.add(messageLabel, gbc);
+
+            gbc.gridy = 1;
+            gbc.anchor = GridBagConstraints.WEST;
+            gbc.weightx = 1.;
+            pnl.add(checkEnable, gbc);
+
+            gbc.gridy = 2;
+            gbc.weightx = 0;
+            pnl.add(new JLabel("Gracefull Delay (secs)"), gbc);
+
+            gbc.gridy = 3;
+            gbc.weightx = 0;
+            pnl.add(new JLabel("Shutdown Hook Delay (secs)"), gbc);
+
+            modelspnGracefullDelay = new SpinnerNumberModel(SHUTDOWN_WAIT_SECS, 0, 300, 1);
+            JSpinner spnGracefullDelay = new JSpinner(modelspnGracefullDelay);
+
+            gbc.gridy = 2;
+            gbc.gridx = 1;
+            gbc.weightx = 0;
+            pnl.add(spnGracefullDelay, gbc);
+
+            modelShutdownHookDelay = new SpinnerNumberModel(SHUTDOWN_WAIT_SECS, 0, 300, 1);
+            JSpinner spnShutdownHookDelay = new JSpinner(modelShutdownHookDelay);
+            modelShutdownHookDelay.addChangeListener(new ChangeListener() {
+				@Override
+				public void stateChanged(ChangeEvent e) {
+					ShutdownDownHookDelay = modelShutdownHookDelay.getNumber().intValue();
+				}
+			});
+
+            gbc.gridy = 3;
+            gbc.gridx = 1;
+            gbc.weightx = 0;
+            pnl.add(spnShutdownHookDelay, gbc);
+
             // レイアウト
             Container contentPane = getContentPane();
             contentPane.setLayout(new BorderLayout());
-            contentPane.add(messageLabel, BorderLayout.NORTH);
-            contentPane.add(progressBar, BorderLayout.CENTER);
+            contentPane.add(pnl, BorderLayout.NORTH);
+            contentPane.add(progressBar, BorderLayout.SOUTH);
 
             messageLabel.setText(nativeLibLoaded ? "Windows7サポートあり" : "Windows7サポートなし");
             pack();
 
+
             if (nativeLibLoaded) {
-                // シャットダウンの遅延を設定する.
-                // ※ シャットダウンの遅延はネイティブウィンドウに関連づけられており、
-                // ウィンドウが破棄されれば解除されることに注意.
-                Win7Support.shutdownBlockReasonCreate(this);
+            	enableShutdownDelayer();
             }
 
         } catch (Exception ex) {
             dispose();
             throw new RuntimeException(ex);
         }
+    }
+
+    private boolean enableShutdownDelayer;
+
+    private void enableShutdownDelayer() {
+    	if (!enableShutdownDelayer) {
+            // シャットダウンの遅延を設定する.
+            // ※ シャットダウンの遅延はネイティブウィンドウに関連づけられており、
+            // ウィンドウが破棄されれば解除されることに注意.
+            Win7Support.shutdownBlockReasonCreate(this);
+            enableShutdownDelayer = true;
+            System.out.println("enableShutdownDelayer.");
+    	}
+    }
+
+    private void disableShutdownDelayer() {
+    	if (enableShutdownDelayer) {
+            // シャットダウンの遅延を解除する.
+            // Win7Support.shutdownBlockReasonDestroy(JavaForWin7Frame.this);
+            // ※ 明示的に解除しなくてもウィンドウが破棄されると自動的に解除となる.
+        	Win7Support.shutdownBlockReasonDestroy(this);
+            System.out.println("disableShutdownDelayer.");
+            enableShutdownDelayer = false;
+    	}
     }
 
     /**
@@ -217,6 +320,9 @@ public class JavaForWin7Frame extends JFrame {
         if (timer == null) {
             System.out.println("wait for graceful shutdown.");
             messageLabel.setText("終了処理中です");
+            int delay = modelspnGracefullDelay.getNumber().intValue();
+            System.out.println("Graceful shutdown delay=" + delay);
+            progressBar.setMaximum(delay * 10);
             progressBar.setValue(progressBar.getMaximum());
 
             // タイマーで0.1秒ごとにカウントダウンする.
@@ -229,17 +335,15 @@ public class JavaForWin7Frame extends JFrame {
                     v = v - 1;
 
                     progressBar.setValue(v);
-                    if (v == progressBar.getMinimum()) {
+                    if (v <= progressBar.getMinimum()) {
                         // プログレスバーが最小値まで到達したら終了する.
                         timer.stop();
 
                         System.out.println("done!");
                         System.out.flush();
 
-                        if (nativeLibLoaded) {
-                            // シャットダウンの遅延を解除する.
-                            // Win7Support.shutdownBlockReasonDestroy(JavaForWin7Frame.this);
-                            // ※ 明示的に解除しなくてもウィンドウが破棄されると自動的に解除となる.
+                        if (nativeLibLoaded && enableShutdownDelayer) {
+                        	disableShutdownDelayer();
                         }
 
                         JavaForWin7Frame.this.dispose();
@@ -278,7 +382,9 @@ public class JavaForWin7Frame extends JFrame {
         rt.addShutdownHook(new Thread() {
             @Override
             public void run() {
-                int mx = SHUTDOWN_WAIT_SECS * 10;
+                int delay = JavaForWin7Frame.ShutdownDownHookDelay;
+                System.out.println("Shutdown Delay: " + delay);
+                int mx = delay * 10;
                 for (int idx = 0; idx < mx; idx++) {
                     System.out.println("called shutdown hook! " +
                             (idx + 1) + "/" + mx);
@@ -290,6 +396,8 @@ public class JavaForWin7Frame extends JFrame {
                         break;
                     }
                 }
+                System.out.println("done!!.");
+                System.out.flush();
             }
         });
     }

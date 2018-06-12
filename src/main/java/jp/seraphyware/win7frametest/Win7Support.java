@@ -86,15 +86,19 @@ public class Win7Support {
             System.out.println("dllPath=" + dllPath);
 
             // 同一ハッシュ値、同一サイズの既存のDLLがすでにテンポラリに展開されている場合は改めて展開はしない。
-            if (!Files.exists(dllPath) && Files.size(dllPath) == size) {
+            if (!(Files.exists(dllPath) && Files.size(dllPath) == size)) {
                 try (InputStream is = Win7Support.class.getClassLoader().getResourceAsStream(resourceName);
                 		FileChannel fc = (FileChannel) Files.newByteChannel(dllPath,
                 				StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING,
                 				StandardOpenOption.WRITE)) {
                 	fc.transferFrom(Channels.newChannel(is), 0, size);
                 }
+                System.out.println("copied.");
+            } else {
+                System.out.println("already exists.");
             }
 
+            System.out.println("loading... " + dllPath.toString());
             System.load(dllPath.toString());
 
 			nativeLibLoaded = true;
