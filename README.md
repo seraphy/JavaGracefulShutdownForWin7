@@ -12,6 +12,19 @@ JavaアプリのWindows7における終了処理について
 本アプリでは、JNIを用いてShutdownBlockReasonCreate関数を呼び出すことにより、
 ログオフ、リブート、シャットダウンの要求時でもアプリケーションの終了処理が完了するように拡張するものである。
 
+## 想定環境
+
+- Windows7, 10
+- java
+  - x86 Java6, 7, 8
+  - x64 Java6, 7, 8, 9, 10
+
+- JavaはEclipseのプロジェクトであるが、mavenプロジェクトでもあるので、mavenでビルド可能である。
+
+- ネイティブの開発環境は **Visual Studio Express 2017 For Windows Desktop** である。
+(VS2012で作成したプロジェクトであり、VS2012以降ならビルドできると思われる。)
+
+
 ## 使い方と仕組み
 
 シャットダウン時に強制終了されないように、ネイティブ関数である **ShutdownBlockReasonCreate関数** を呼び出すための
@@ -60,24 +73,31 @@ WM_QUERYENDSESSIONメッセージの処理をオーバーライドしている�
 本アプリケーション例のように、Javaアプリのネイティブの挙動をカスタマイズするような必要性がある場合には、
 動作するJREのバージョンを確認済みのものとするため、アプリケーションにJREをバンドルし、そのJREのみを使用するのが望ましいといえる。
 
-なお、確認したかぎりでは、Sunの実装であるJRE6でも、Oracleの実装であるJRE7(およびJRE8-ea版)でも、
+なお、確認したかぎりでは、Sunの実装であるJRE6でも、Oracleの実装であるJRE7、JRE8、JRE9、JRE10いずれでも、
 本アプリケーションは、うまく機能しているため、それほどシビアではなさそうではある。
+
 
 ## 本アプリのネイティブライブラリのビルド方法
 
-本アプリのネイティブライブラリは、 **[Visual Studio 2012 Express for Desktop](http://www.microsoft.com/visualstudio/jpn/products/visual-studio-express-for-windows-desktop)** でビルドできるようになっている。
+mavenのビルド時には、リソース生成フェーズで、ネイティブライブラリビルドのためのバッチファイルも起動し、
+生成したdllをリソースに含めるようにしている。(もちろん、Windows環境のみ)
 
-ビルドには、jawt.libとjniの各種ヘッダを参照するため、JDKのJAVA_HOMEを設定する必要がある。
+したがって基本的には手作業でビルドする必要はない。
 
-これは **"JavaConfig.props"** ファイルで指定している。
 
-(32ビットと64ビットの、それぞれのJDKへの位置を指定する必要がある。)
+ネイティブライブラリビルドのためのバッチファイルでは、Visual Studio 2010 - 2017のインストール位置をレジストリ等より検索し、
+そこで **vcvarsall.bat** を呼び出してビルド用の環境変数を設定して、**MSBuild** の実行を行うようにしている。
 
-JavaConfig.propsでは、環境変数JAVA_HOMEが未設定の場合は、レジストリからx64/x86のビルド環境に合わせて、
-JAVA_HOMEの位置を検索して設定している。
 
-なお、このファイルを書き換えた場合にはソリューションの再起動が必要である。
+本アプリのネイティブライブラリは、 **[Visual Studio 2017 Express for Windows Desktop](https://www.visualstudio.com/ja/vs/express/)** で編集、ビルドできるようになっている。
 
+
+ビルドには、jawt.libとjniの各種ヘッダを参照するため、JDKのJAVA_HOMEを設定する必要があるが、
+
+これは **"JavaConfig.props"** ファイルで、環境変数JAVA_HOMEが未設定の場合は、
+レジストリのJavaSoft下からx64/x86のビルド環境に合わせてJAVA_HOMEの位置を検索して設定している。
+
+(なお、このファイルを書き換えた場合にはソリューションの再起動が必要である。)
 
 ## 参考文献/URL
 

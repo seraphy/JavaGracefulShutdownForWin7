@@ -11,12 +11,19 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
-import java.io.FileOutputStream;
+import java.io.BufferedOutputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintStream;
 import java.math.BigDecimal;
 import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Date;
+import java.util.Properties;
+import java.util.TreeSet;
+import java.util.concurrent.ConcurrentLinkedDeque;
 
 import javax.imageio.ImageIO;
 import javax.swing.AbstractAction;
@@ -27,13 +34,17 @@ import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JProgressBar;
+import javax.swing.JScrollPane;
 import javax.swing.JSpinner;
+import javax.swing.JTextArea;
+import javax.swing.ScrollPaneConstants;
 import javax.swing.SpinnerNumberModel;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import javax.swing.UIManager;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
+import javax.swing.text.Document;
 
 /**
  * JNIを用いてWindows7のネイティブAPIを通じて、 シャットダウンまたはリブート時にアプリケーションが
@@ -78,7 +89,17 @@ public class JavaForWin7Frame extends JFrame {
      */
     private static boolean nativeLibLoaded;
 
+    /**
+     * シャットダウンフックで処理する遅延時間
+     */
     private static int ShutdownDownHookDelay = SHUTDOWN_WAIT_SECS;
+
+    /**
+     * コンソールバッファ
+     */
+    private static final ConcurrentLinkedDeque<byte[]> consoleBuffer = new ConcurrentLinkedDeque<>();
+
+    private Timer consoleTimer;
 
     /**
      * Staticイニシャライザ
@@ -86,12 +107,39 @@ public class JavaForWin7Frame extends JFrame {
     static {
         try {
             // 標準出力をファイルに送る.(ログ)
-            OutputStream writer = new FileOutputStream("console.log");
+        	Path tempFile = Files.createTempFile("console.", ".log");
+            OutputStream fw = new BufferedOutputStream(Files.newOutputStream(tempFile));
+            OutputStream writer = new OutputStream() {
+
+            	private ByteArrayOutputStream bos = new ByteArrayOutputStream();
+
+				@Override
+				public synchronized void write(int b) throws IOException {
+					bos.write(b);
+					if (b == 0x0a) {
+						fw.flush();
+						byte[] buf = bos.toByteArray();
+						bos.reset();
+						consoleBuffer.add(buf);
+					}
+					fw.write(b);
+				}
+
+				@Override
+            	public void flush() throws IOException {
+					fw.flush();
+            	}
+            };
             PrintStream pw = new PrintStream(writer);
             System.setOut(pw);
             System.setErr(pw);
 
+            // ログ開始
             System.out.println("now=" + new Date());
+            System.out.println("logfile=" + tempFile);
+
+            // システムプロパティの表示
+            dumpSystemProperties();
 
         } catch (Exception ex) {
             ex.printStackTrace();
@@ -112,6 +160,20 @@ public class JavaForWin7Frame extends JFrame {
             ex.printStackTrace();
             throw new RuntimeException(ex);
         }
+    }
+
+    /**
+     * システムプロパティの表示
+     */
+    private static void dumpSystemProperties() {
+        Properties props = System.getProperties();
+    	System.out.println();
+    	System.out.println("[System Properties]");
+        for (String key : new TreeSet<>(props.stringPropertyNames())) {
+        	String val = props.getProperty(key);
+        	System.out.println(key + "=" + val);
+        }
+    	System.out.println();
     }
 
     /**
@@ -196,6 +258,27 @@ public class JavaForWin7Frame extends JFrame {
             progressBar.setMaximum(SHUTDOWN_WAIT_SECS * 10);
             progressBar.setValue(0);
 
+            // コンソールの画面表示
+            JTextArea textArea = new JTextArea();
+            //textArea.setEditable(false);
+            consoleTimer = new Timer(100, new ActionListener() {
+				@Override
+				public void actionPerformed(ActionEvent e) {
+					while (!consoleBuffer.isEmpty()) {
+						byte[] buf = consoleBuffer.removeFirst();
+						String str = new String(buf);
+						Document doc = textArea.getDocument();
+						int len = doc.getLength();
+						try {
+							doc.insertString(len, str, null);
+						} catch (Exception ex) {
+							ex.printStackTrace();
+						}
+					}
+				}
+			});
+            consoleTimer.start();
+
             // パラメータ
             JPanel pnl = new JPanel();
             pnl.setBorder(BorderFactory.createEmptyBorder(3, 3, 3, 3));
@@ -255,16 +338,31 @@ public class JavaForWin7Frame extends JFrame {
             gbc.weightx = 0;
             pnl.add(spnShutdownHookDelay, gbc);
 
+            gbc.gridy = 4;
+            gbc.gridx = 0;
+            gbc.weightx = 1.;
+            gbc.weighty = 1.;
+            gbc.gridwidth = GridBagConstraints.REMAINDER;
+            gbc.gridheight = GridBagConstraints.REMAINDER;
+            gbc.fill = GridBagConstraints.BOTH;
+            JScrollPane scr = new JScrollPane(textArea);
+            scr.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
+            scr.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_ALWAYS);
+            pnl.add(scr, gbc);
+
             // レイアウト
             Container contentPane = getContentPane();
             contentPane.setLayout(new BorderLayout());
-            contentPane.add(pnl, BorderLayout.NORTH);
+            contentPane.add(pnl, BorderLayout.CENTER);
             contentPane.add(progressBar, BorderLayout.SOUTH);
 
             messageLabel.setText(nativeLibLoaded ? "Windows7サポートあり" : "Windows7サポートなし");
             pack();
 
+            setSize(600, 400);
 
+
+        	checkEnable.setSelected(nativeLibLoaded);
             if (nativeLibLoaded) {
             	enableShutdownDelayer();
             }
@@ -344,6 +442,11 @@ public class JavaForWin7Frame extends JFrame {
 
                         if (nativeLibLoaded && enableShutdownDelayer) {
                         	disableShutdownDelayer();
+                        }
+
+                        if (consoleTimer != null) {
+                        	consoleTimer.stop();
+                        	consoleTimer = null;
                         }
 
                         JavaForWin7Frame.this.dispose();
