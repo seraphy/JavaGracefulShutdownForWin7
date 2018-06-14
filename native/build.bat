@@ -99,6 +99,9 @@ rem 検出したSDKとVSにあわせて、MSBuildのPlatformToolsetと、WindowsTargetPlatform
 if not "%PLATFORM_TOOLSET%" == "" set OPT_PLATFORM_TOOLSET=/p:PlatformToolset=%PLATFORM_TOOLSET%
 if not "%WINSDK_VERSION%" == "" set OPT_WINSDK_VERSION=/p:WindowsTargetPlatformVersion=%WINSDK_VERSION%
 
+rem MSBuildの中でJAVA_HOMEを検索させたいので、環境変数JAVA_HOMEは消しておく
+set JAVA_HOME=
+
 rem MSBUILD呼び出し
  msbuild /m /t:rebuild /p:Configuration=Release /p:Platform="win32" %OPT_PLATFORM_TOOLSET% %OPT_WINSDK_VERSION%
 if errorlevel 1 goto err
